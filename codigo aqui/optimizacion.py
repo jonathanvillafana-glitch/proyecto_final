@@ -18,7 +18,7 @@ from metricas import perdida_compuesta
 BOUNDS = [
     (0.0,    1.0),    # x — posición horizontal, 0=izq, 1=der
     (0.0,    1.0),    # y — posición vertical, 0=arr, 1=aba
-    (0.0,    6.2832), # theta — rotación en radianes (0 a 2π = 6.2832)
+    (0.0, 2 * np.pi), # theta — rotación en radianes (0 a 2π = 6.2832)
     (0.01,   0.30),   # r1 — semieje principal, mínimo 0.01 para ser visible
     (0.01,   0.30),   # r2 — semieje secundario
     (0.0,    1.0),    # R  — canal rojo
@@ -94,16 +94,20 @@ def _evaluar_stroke(vector, canvas, imagen_objetivo, n_strokes_actuales):
 
 
 # ──────────────────────────────────────────
-# random_search  (Hill Climbing estocástico)
+# Random Search para inicialización
 # ──────────────────────────────────────────
 def random_search(canvas, imagen_objetivo, n_strokes_actuales, n_candidatos=200):
     """
     Explora n_candidatos strokes aleatorios y devuelve el que más
     reduce la pérdida
-    Implementa la fase de exploración (Hill Climbing)
+    Implementa la fase de exploración
 
-    se llama random_search si es Hill Climbing estocástico consiste exactamente en esto:
-    generar vecinos aleatorios del estado actual y quedarse con el mejor
+    Random Search genera múltiples soluciones aleatorias
+    independientes en el espacio de búsqueda y selecciona
+    la que produce la menor pérdida
+
+    Esta estrategia proporciona una exploración global
+    antes del refinamiento local realizado por L-BFGS-B
     No hay un "vecindario" fijo como en Hill Climbing clásico porque
     el espacio de parámetros es continuo (x,y,theta,r1,r2,R,G,B,alpha)
 
@@ -142,7 +146,7 @@ def random_search(canvas, imagen_objetivo, n_strokes_actuales, n_candidatos=200)
             n_strokes_actuales
         )
 
-        # Hill Climbing: solo nos quedamos si mejora (baja la pérdida)
+        # Conservamos el mejor candidato encontrado hasta el momento
         if perdida_candidato < mejor_perdida:
             mejor_perdida = perdida_candidato
             mejor_stroke  = candidato
@@ -183,7 +187,7 @@ def optimizar_bfgs(canvas, imagen_objetivo, stroke_inicial, n_strokes_actuales):
     Returns:
         Stroke — stroke con parámetros refinados (mejor que el inicial)
     """
-    # El punto de inicio para scipy es el vector del mejor stroke de Hill Climbing
+    # El punto de inicio para scipy es el mejor stroke encontrado por Random Search
     vector_inicial = stroke_inicial.to_vector()
 
     # scipy.optimize.minimize es la función central de scipy para optimización
@@ -244,7 +248,7 @@ def optimizar_stroke(canvas, imagen_objetivo, n_strokes_actuales):
     Returns:
         Stroke — el stroke final listo para agregar al canvas
     """
-    # Fase 1: Exploración con Hill Climbing
+    # Fase 1: Exploración con Random Search
     # Genera 200 strokes aleatorios y devuelve el que menos pérdida tiene
 
     candidato, perdida_hill = random_search(
@@ -255,7 +259,7 @@ def optimizar_stroke(canvas, imagen_objetivo, n_strokes_actuales):
     )
 
     # Fase 2: Refinamiento con L-BFGS-B 
-    # Parte del candidato de Hill Climbing y ajusta sus 9 parámetros
+    # Parte del candidato de Random Search y ajusta sus 9 parámetros
     # matemáticamente para llegar al mínimo local más cercano
 
     stroke_final = optimizar_bfgs(

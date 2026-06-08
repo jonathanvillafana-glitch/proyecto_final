@@ -16,12 +16,12 @@ class Stroke:
         shape  : tipo de figura                  ('circle', 'ellipse', 'rectangle')
     """
  
-    def __init__(self, x, y, theta, r1, r2, color, alpha, shape='circle'):
+    def __init__(self, x, y, theta, r1, r2, color, alpha, shape='ellipse'):
         self.x     = float(np.clip(x,     0.0, 1.0))
         self.y     = float(np.clip(y,     0.0, 1.0))
         self.theta = float(theta % (2 * np.pi))
-        self.r1    = float(np.clip(r1,    0.01, 0.5))
-        self.r2    = float(np.clip(r2,    0.01, 0.5))
+        self.r1    = float(np.clip(r1,    0.01, 0.30))
+        self.r2    = float(np.clip(r2,    0.01, 0.30))
         self.color = np.clip(np.array(color, dtype=np.float32), 0.0, 1.0)
         self.alpha = float(np.clip(alpha, 0.0, 1.0))
         self.shape = shape
@@ -48,7 +48,7 @@ class Stroke:
         ]
  
     @staticmethod
-    def from_vector(v, shape='circle'):
+    def from_vector(v, shape='ellipse'):
         """
         Reconstruye un Stroke desde una lista de 9 números.
         Inverso de to_vector().
@@ -66,7 +66,7 @@ class Stroke:
         )
  
     @staticmethod
-    def aleatorio(shape='circle', r_max=0.12):
+    def aleatorio(shape='ellipse', r_max=0.12):
         """
         Crea un Stroke con parámetros aleatorios.
         Útil para el optimizador de búsqueda aleatoria.
