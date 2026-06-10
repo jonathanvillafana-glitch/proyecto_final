@@ -12,13 +12,13 @@ from optimizacion import optimizar_stroke
 # ───────────────
 # Parámetros
 
-SEED        = 42          # semilla 
-IMAGE_SIZE  = (512, 512)  # (ancho, alto) 
-N_STROKES   = 200         # total de strokes
-SAVE_EVERY  = 5          # guardar frame cada cuántas iteraciones
-CARPETA_OUT = 'output/'   # carpeta donde se guardan frames y GIF
+SEED        = 42          # semilla para reproducibilidad
+IMAGE_SIZE  = (256, 256)  # (ancho, alto) en píxeles
+N_STROKES   = 50         # cuántos strokes vamos a pintar en total
+SAVE_EVERY  = 5          # cada cuántas iteraciones guardamos un frame
+CARPETA_OUT = 'output/'   # aquí van los frames y el GIF
 
-# Pesos de la función objetivo 
+# Pesos de la función objetivo
 ALPHA_LOSS  = 0.6
 BETA_LOSS   = 0.35
 GAMMA_LOSS  = 0.0005
@@ -33,7 +33,7 @@ def cargar_imagen(path, size=IMAGE_SIZE):
     Abre una imagen desde disco, la redimensiona y la convierte a
     numpy array con valores entre 0 y 1
 
-    Nuestras métricas (MSE, SSIM) y el alpha blending en render()
+    Las métricas (MSE, SSIM) y el alpha blending en render()
     asumen ese rango
 
     Args:
@@ -43,18 +43,16 @@ def cargar_imagen(path, size=IMAGE_SIZE):
     Returns:
         numpy array (H, W, 3) float32 con valores en [0.0, 1.0]
     """
-    # PIL abre la imagen en cualquier formato 
+    # PIL puede abrir prácticamente cualquier formato
     img = Image.open(path)
 
-    # Convertimos a RGB por si la imagen tiene canal alpha
-    # o es escala de grises
+    # Pasamos a RGB por si la imagen tiene canal alpha o es escala de grises
     img = img.convert('RGB')
 
-    # Redimensionamos - PIL usa (ancho, alto) = (W, H)
+    # Redimensionamos — PIL usa (ancho, alto) = (W, H)
     img = img.resize(size, Image.LANCZOS)
 
-    # Convertimos a numpy array, PIL da valores 0-255 (uint8)
-    # Dividimos entre 255.0 para pasar a rango [0, 1]
+    # PIL da valores 0-255 (uint8), dividimos entre 255 para quedar en [0, 1]
     array = np.array(img, dtype=np.float32) / 255.0
 
     # Resultado: shape (H, W, 3), dtype float32, valores en [0,1]
@@ -81,15 +79,14 @@ def guardar_frame(canvas, paso, carpeta=CARPETA_OUT):
         paso    : int — número de iteración actual
         carpeta : str — carpeta donde guardar
     """
-    # Crear la carpeta si no existe (exist_ok=True evita error si ya existe)
+    # Creamos la carpeta si no existe
     os.makedirs(carpeta, exist_ok=True)
 
-    # Convertimos de [0,1] a [0,255] para guardar como PNG
-    # np.clip asegura que no haya valores fuera de rango por redondeos
+    # Regresamos de [0,1] a [0,255] para poder guardar como PNG
+    # np.clip evita valores fuera de rango por redondeos
     img_uint8 = np.clip(canvas * 255.0, 0, 255).astype(np.uint8)
 
-    # Construimos el nombre con formato 4 dígitos: f"frame_{paso:04d}.png"
-    # :04d significa "entero con mínimo 4 dígitos, rellena con ceros a la izq"
+    # Nombre con 4 dígitos: f"frame_{paso:04d}.png"
     nombre = os.path.join(carpeta, f"frame_{paso:04d}.png")
 
     # PIL necesita un array uint8 para guardar correctamente
@@ -102,14 +99,14 @@ def guardar_frame(canvas, paso, carpeta=CARPETA_OUT):
 
 def generar_gif(carpeta=CARPETA_OUT, nombre='evolucion.gif'):
     """
-    imageio lee cada PNG como array, los acumula en una lista
+    imageio lee cada PNG, los acumula en una lista
     y los escribe como frames del GIF
 
     Args:
         carpeta : str — carpeta donde están los frames
         nombre  : str — nombre del archivo GIF resultante
     """
-    # Listamos todos los archivos PNG en la carpeta
+    # Listamos todos los PNGs de la carpeta que sean frames nuestros
     archivos = sorted([
         os.path.join(carpeta, f)
         for f in os.listdir(carpeta)
@@ -121,7 +118,7 @@ def generar_gif(carpeta=CARPETA_OUT, nombre='evolucion.gif'):
         print("[generar_gif] No se encontraron frames en:", carpeta)
         return
 
-    # Leemos cada frame y lo acumulamos
+    # Leemos cada frame
     frames = [imageio.imread(archivo) for archivo in archivos]
 
     # Guardamos el GIF
@@ -141,52 +138,49 @@ def main():
     """
     Loop principal del experimento
 
-    Coordina todo, carga la imagen, inicializa el canvas,
+    Coordina todo: carga la imagen, inicializa el canvas,
     optimiza strokes uno por uno, guarda frames y genera el GIF
     """
 
-    # Semilla de reproducibilidad 
-    # Con la misma semilla el experimento da exactamente los mismos
-    # resultados en cualquier máquina
+    # Fijamos la semilla para que el experimento sea reproducible
     np.random.seed(SEED)
 
-    # Paso 1: Cargar imagen objetivo 
+    # Paso 1: Cargar imagen objetivo
     print("[main] Cargando imagen...")
     imagen_original = cargar_imagen('imagen.png', size=IMAGE_SIZE)
 
-    # IMAGE_SIZE = (512, 512) es (W, H) en PIL, pero numpy lo guarda como (H, W, 3)
-    # Extraemos H y W del array resultante para no confundirnos
+    # IMAGE_SIZE = (W, H) en PIL, pero numpy lo guarda como (H, W, 3)
+    # Extraemos H y W del array para no confundirnos
     H, W, _ = imagen_original.shape
     print(f"[main] Imagen cargada: {H}x{W} píxeles, rango [{imagen_original.min():.2f}, {imagen_original.max():.2f}]")
 
     # Paso 2: Inicializar canvas negro
-    # np.zeros -> todos los píxeles en 0.0 = negro puro
-    # dtype float32 para consistencia con imagen_original
+    # np.zeros -> todos los píxeles en 0.0 = negro
     canvas = np.zeros((H, W, 3), dtype=np.float32)
 
-    # Paso 3: Crear carpeta de salida 
+    # Paso 3: Crear carpeta de salida
     os.makedirs(CARPETA_OUT, exist_ok=True)
 
-    # Paso 4: Abrir archivo de log 
+    # Paso 4: Abrir archivo de log
     # 'w' crea el archivo nuevo (o sobreescribe si ya existe)
     ruta_log = os.path.join(CARPETA_OUT, 'logs_convergencia.txt')
     log = open(ruta_log, 'w', encoding='utf-8')
-    log.write("iteracion,perdida\n")  # encabezado CSV para graficar luego
+    log.write("iteracion,perdida\n")  # encabezado CSV para graficar después
     print(f"[main] Log abierto en: {ruta_log}")
 
-    # Paso 5: Loop principal 
+    # Paso 5: Loop principal
     print(f"[main] Iniciando loop: {N_STROKES} strokes...\n")
 
     for t in range(1, N_STROKES + 1):
 
-        # PASO 5a: Encontrar y optimizar el mejor stroke nuevo
-        # optimizar_stroke hace internamente: Hill Climbing -> L-BFGS-B
+        # PASO 5a: Optimizar el siguiente stroke
+        # optimizar_stroke hace internamente: Random Search -> BFGS
         stroke_nuevo = optimizar_stroke(canvas, imagen_original, t - 1)
-        # t-1 porque antes de agregar este stroke, hay t-1 strokes en el canvas
+        # t-1 porque antes de agregar este stroke hay t-1 strokes en el canvas
 
         # PASO 5b: Agregar el stroke al canvas
         # render() recibe el stroke nuevo y el canvas actual como base
-        # Devuelve un canvas nuevo (no modifica el original)
+        # devuelve un canvas nuevo sin modificar el original
         canvas = render(
             [stroke_nuevo],   # solo el stroke nuevo
             H, W,
@@ -204,8 +198,9 @@ def main():
         )
 
         # PASO 5d: Escribir en el log
-        # Formato CSV: "1,0.4321" para poder graficarlo fácilmente después
+        # CSV: "1,0.4321" para poder graficarlo fácilmente después
         log.write(f"{t},{perdida_actual:.6f}\n")
+        log.flush()
 
         # PASO 5e: Imprimir progreso en consola cada 10 iteraciones
         if t % 10 == 0 or t == 1:
@@ -220,13 +215,13 @@ def main():
     log.close()
     print(f"\n[main] Log cerrado")
 
-    # Paso 7: Guardar imagen final 
+    # Paso 7: Guardar imagen final
     ruta_final = os.path.join(CARPETA_OUT, 'resultado_final.png')
     img_final  = np.clip(canvas * 255.0, 0, 255).astype(np.uint8)
     Image.fromarray(img_final).save(ruta_final)
     print(f"[main] Resultado final guardado en: {ruta_final}")
 
-    # Paso 8: Generar GIF 
+    # Paso 8: Generar GIF
     print("[main] Generando GIF...")
     generar_gif(carpeta=CARPETA_OUT, nombre='evolucion.gif')
 
